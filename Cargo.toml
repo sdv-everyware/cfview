@@ -1,0 +1,20 @@
+[package]
+name = "cfview"
+version = "1.0.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Standalone Cuttlefish viewer: multi-VM display compositing on the GPU straight from the shm ring buffers, plus input injection. No WebRTC, no browser, no encoder."
+
+# An empty table keeps this crate standalone: a Cargo workspace in a parent
+# directory would otherwise claim it (this is a host tool, not part of a
+# Soong build).
+[workspace]
+
+# ZERO external crates, deliberately. Everything this tool needs from the OS
+# (mmap, dlopen, process pipes) is reachable through std plus a handful of
+# hand-declared libc externs. So it builds offline with the tree's pinned
+# toolchain, and there is no dependency tree to audit or vendor.
+[dependencies]
+
+[profile.release]
+panic = "abort"
