@@ -1,6 +1,6 @@
 [package]
 name = "cfview"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "Apache-2.0"
 description = "Standalone Cuttlefish viewer: multi-VM display compositing on the GPU straight from the shm ring buffers, plus input injection. No WebRTC, no browser, no encoder."

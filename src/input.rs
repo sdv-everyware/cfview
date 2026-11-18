@@ -197,6 +197,7 @@ impl Bridge {
     /// must go to touchscreen N, or a click on a cluster display ends up on the
     /// main screen. There is one keyboard per VM.
     pub fn open(adb: &str, serial: &str, display: u32, label: &'static str) -> Bridge {
+        ensure_root(adb, serial);
         let (touch_node, kbd_node) = discover_nodes(adb, serial, display);
         let touch = touch_node.map(|n| Pipe::open(adb, serial, &n, format!("{label}/touch")));
         let keyboard = kbd_node.map(|n| Pipe::open(adb, serial, &n, format!("{label}/keys")));
@@ -250,6 +251,69 @@ struct DevInfo {
     name: String,
     is_touch: bool,
     is_keyboard: bool,
+}
+
+/// Runs one adb command for `serial` and returns its stdout, or None when adb
+/// cannot be started, fails, or takes longer than `limit` (then it is killed).
+fn adb_run(adb: &str, serial: &str, args: &[&str], limit: Duration) -> Option<String> {
+    use std::io::Read;
+    let mut child = Command::new(adb)
+        .args(["-s", serial])
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let start = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut out = String::new();
+                child.stdout.take()?.read_to_string(&mut out).ok()?;
+                return status.success().then_some(out);
+            }
+            Ok(None) if start.elapsed() < limit => std::thread::sleep(Duration::from_millis(50)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+}
+
+fn is_root(adb: &str, serial: &str) -> Option<bool> {
+    adb_run(adb, serial, &["shell", "id", "-u"], Duration::from_secs(5)).map(|o| o.trim() == "0")
+}
+
+/// Makes adbd of `serial` run as root, because a guest with SELinux enforcing
+/// refuses writes to its input nodes from the adb shell user (the nodes are
+/// 0660 root:input and the shell user is in that group, but the policy has no
+/// rule for it). `adb root` works on userdebug and eng builds. When it does
+/// not, the user is told what that means; the picture needs no adb at all.
+fn ensure_root(adb: &str, serial: &str) {
+    match is_root(adb, serial) {
+        Some(true) => return,
+        Some(false) => {}
+        None => {
+            eprintln!("cfview: {serial}: adb gives no answer ({adb}) -- view only, no input. Is adb installed and the device online? ADB=/path/to/adb picks another adb.");
+            return;
+        }
+    }
+    println!("cfview: {serial}: adb root");
+    let _ = adb_run(adb, serial, &["root"], Duration::from_secs(10));
+    // adbd restarts: the device is gone for a moment
+    let _ = adb_run(adb, serial, &["wait-for-device"], Duration::from_secs(15));
+    if is_root(adb, serial) == Some(true) {
+        return;
+    }
+    let enforcing = adb_run(adb, serial, &["shell", "getenforce"], Duration::from_secs(5))
+        .map(|o| o.trim().eq_ignore_ascii_case("enforcing"));
+    if enforcing == Some(false) {
+        eprintln!("cfview: {serial}: adb root did not work; SELinux is permissive, so input goes through the adb shell user");
+    } else {
+        eprintln!("cfview: {serial}: adb root did not work (a user build?) and SELinux is enforcing: the guest refuses mouse and keys from the adb shell user. View only. Input needs a userdebug or eng image, or a guest started permissive.");
+    }
 }
 
 /// Runs `getevent -pi` and returns its startup dump, killing it after a short

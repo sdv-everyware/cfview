@@ -34,6 +34,10 @@ change the picture:
 --display0=width=1920,height=1080,overlays=0:0
 ```
 
+`display0` is the VM's first display, `width` and `height` its size (both are
+required by Cuttlefish; put the size of your display there), and `overlays=0:0`
+is display 0 of VM 0: the display itself.
+
 cfview reads the newest `cuttlefish_config.json` under `/var/tmp/cvd` and
 takes from it the `group_uuid`, the instances with their adb addresses, and
 the `overlays` of each display (`vm:display` pairs separated by spaces, in
@@ -57,10 +61,14 @@ picks the boot-time virtio input nodes:
 
 For each node cfview keeps a long-lived `adb shell 'cat > /dev/input/eventN'`
 open and writes 24-byte `struct input_event` records into it (multitouch
-protocol type B for touch). The nodes are `0660 root:input` and the adb shell
-user is in the input group, so adb root is not needed. When a pipe dies, for
-example because `adb root` restarted adbd, cfview opens it again, at most once
-a second.
+protocol type B for touch). When a pipe dies, cfview opens it again, at most
+once a second.
+
+Writing to the nodes needs adb as root: a guest with SELinux enforcing refuses
+the adb shell user, although the nodes are `0660 root:input` and that user is
+in the input group. So cfview runs `adb root` at start on every VM that is not
+root yet. That works on userdebug and eng images. Where it does not, cfview
+says so and shows the picture without input.
 
 Routing:
 
@@ -79,9 +87,24 @@ Routing:
 
 - A Linux host with a running Cuttlefish group that has display overlays (see
   above)
-- Rust 1.82 or newer (run.sh can use the prebuilt toolchain of an AOSP tree)
 - The SDL2 runtime library `libSDL2-2.0.so.0` (no dev package needed)
-- adb
+- adb, for input: the Cuttlefish host package installs one, and cfview finds
+  it. Without adb cfview shows the screen and sends no input
+- For input, a userdebug or eng image (cfview runs `adb root`), or a guest
+  started with SELinux permissive
+- To build it: Rust 1.82 or newer (run.sh can use the prebuilt toolchain of an
+  AOSP tree)
+
+## Download
+
+A built binary for x86-64 Linux (glibc 2.28 or newer) is on the
+[releases page](https://github.com/sdv-everyware/cfview/releases), with its
+SHA-256:
+
+```bash
+chmod +x cfview-1.0.1-x86_64-linux
+./cfview-1.0.1-x86_64-linux [display] [vm]
+```
 
 ## Build and run
 
