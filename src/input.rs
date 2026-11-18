@@ -128,6 +128,7 @@ impl Pipe {
             return;
         }
         self.last_attempt = Instant::now();
+        root_again(&self.adb, &self.serial);
         self.child = Self::spawn(&self.adb, &self.serial, &self.node);
         if self.child.is_some() {
             println!(
@@ -314,6 +315,30 @@ fn ensure_root(adb: &str, serial: &str) {
     } else {
         eprintln!("cfview: {serial}: adb root did not work (a user build?) and SELinux is enforcing: the guest refuses mouse and keys from the adb shell user. View only. Input needs a userdebug or eng image, or a guest started permissive.");
     }
+}
+
+/// After a guest reboot adbd is the shell user again and the pipes are refused,
+/// so a pipe that has to be opened again asks for root again. In the
+/// background, one attempt at a time, because adb can take seconds while the
+/// guest boots and the window must not wait for it; without the messages of
+/// the start, which would repeat every second.
+fn root_again(adb: &str, serial: &str) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static BUSY: AtomicBool = AtomicBool::new(false);
+    if BUSY.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let (adb, serial) = (adb.to_string(), serial.to_string());
+    std::thread::spawn(move || {
+        if is_root(&adb, &serial) == Some(false) {
+            let _ = adb_run(&adb, &serial, &["root"], Duration::from_secs(10));
+            let _ = adb_run(&adb, &serial, &["wait-for-device"], Duration::from_secs(15));
+            if is_root(&adb, &serial) == Some(true) {
+                println!("cfview: {serial}: adb root again (the guest restarted)");
+            }
+        }
+        BUSY.store(false, Ordering::SeqCst);
+    });
 }
 
 /// Runs `getevent -pi` and returns its startup dump, killing it after a short
