@@ -1,5 +1,12 @@
 # cfview
 
+[![The same emulator in Cuttlefish's browser client (left) and in cfview (right)](docs/cfview-comparison.png)](docs/cfview-comparison.mp4)
+
+The same emulator, side by side: Cuttlefish's browser client on the left, cfview on the right.
+The picture is a frame of [the video](docs/cfview-comparison.mp4) (60 s). The figures in it are
+measurements on one laptop: the browser client's video stream changed the colours and delivered
+a third to four fifths of the frames, and its encoder used more than one CPU core.
+
 cfview is a standalone viewer for Cuttlefish displays. It shows one display of
 a running Cuttlefish group in an SDL2 window, lays the overlay layers of other
 VMs on top of it on the GPU, and sends mouse and keyboard input back to the
