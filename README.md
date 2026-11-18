@@ -102,8 +102,8 @@ A built binary for x86-64 Linux (glibc 2.28 or newer) is on the
 SHA-256:
 
 ```bash
-chmod +x cfview-1.0.1-x86_64-linux
-./cfview-1.0.1-x86_64-linux [display] [vm]
+chmod +x cfview-1.0.2-x86_64-linux
+./cfview-1.0.2-x86_64-linux [display] [vm]
 ```
 
 ## Build and run
